@@ -104,6 +104,7 @@ Run the hand-tracking application:
 
 ```powershell
 python hand_tracking.py
+python -m src.ui.app
 ```
 
 Place your hand in view of the webcam. The application should display the detected hand landmarks and gesture status. Pinch your thumb and index finger, then move your index finger up or down to control scrolling.

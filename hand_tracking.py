@@ -99,7 +99,7 @@ def main():
     try:
         detector = HandDetector(
             model_path=str(MODEL_PATH),
-            max_hands=1
+            max_hands=10
         )
         pinch_detector = PinchDetector(
             threshold=0.05,
@@ -171,6 +171,42 @@ def main():
                 index_tip = landmarks[8]
                 # Detect the pinch gesture
                 pinch_distance, pinch_active = pinch_detector.detect(landmarks)
+                # Get frame dimensions
+                height, width, _ = frame.shape
+
+                # Thumb tip: landmark 4
+                thumb_x = int(landmarks[4].x * width)
+                thumb_y = int(landmarks[4].y * height)
+
+                # Index fingertip: landmark 8
+                index_x = int(landmarks[8].x * width)
+                index_y = int(landmarks[8].y * height)
+
+                # Draw a line connecting the two fingertips
+                line_color = (0, 255, 0) if pinch_active else (0, 165, 255)
+
+                cv2.line(
+                    frame,
+                    (thumb_x, thumb_y),
+                    (index_x, index_y),
+                    line_color,
+                    3
+                )
+
+                # Highlight the fingertips
+                cv2.circle(frame, (thumb_x, thumb_y), 8, (255, 0, 255), -1)
+                cv2.circle(frame, (index_x, index_y), 8, (255, 0, 255), -1)
+
+                # Show the distance between the fingertips
+                cv2.putText(
+                    frame,
+                    f"Pinch distance: {pinch_distance:.3f}",
+                    (20, 105),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.6,
+                    (255, 255, 255),
+                    2
+                )
 
                 if pinch_active:
                     # Track index finger movement
