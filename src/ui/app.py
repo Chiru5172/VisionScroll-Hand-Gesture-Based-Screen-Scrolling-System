@@ -239,7 +239,10 @@ class VisionScrollApp:
             return
 
         frame = self.camera_worker.get_frame()
-
+        if self.camera_worker is not None:
+            self.gesture_label.config(
+                text=self.camera_worker.gesture_status
+            )
         if frame is not None:
             # Convert OpenCV BGR image to RGB
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)

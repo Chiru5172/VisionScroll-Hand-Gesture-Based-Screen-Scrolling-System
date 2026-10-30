@@ -80,11 +80,20 @@ class CameraWorker:
 
             self.detector = HandDetector(
                 model_path=str(MODEL_PATH),
-                max_hands=1
+                max_hands=4
             )
             pinch_detector = PinchDetector(
                 threshold=0.05,
                 release_threshold=0.07
+            )
+
+            movement_tracker = MovementTracker(
+                movement_threshold=0.04
+            )
+
+            scroll_controller = ScrollController(
+                scroll_amount=30,
+                cooldown=0.03
             )
 
             previous_timestamp_ms = -1
@@ -107,33 +116,95 @@ class CameraWorker:
                 if result.hand_landmarks:
                     landmarks = result.hand_landmarks[0]
 
-                    # Draw hand landmarks
+                    # Draw the detected hand
                     self._draw_landmarks(frame, landmarks)
 
-                    # Detect pinch gesture
-                    pinch_distance, pinch_active = pinch_detector.detect(
-                        landmarks
+                    # Detect pinch
+                    pinch_distance, pinch_active = pinch_detector.detect(landmarks)
+
+                    self.pinch_active = pinch_active
+
+                    # Track index-finger movement only while pinching
+                    if pinch_active:
+                        index_tip = landmarks[8]
+
+                        movement = movement_tracker.update(
+                            index_tip,
+                            time.monotonic()
+                        )
+
+                        direction = movement["direction"]
+
+                        # Scroll only when a clear direction is detected
+                        if direction in ("UP", "DOWN"):
+                            scroll_controller.scroll(direction)
+
+                        self.scroll_direction = direction
+
+                        if direction == "UP":
+                            self.gesture_status = "Scrolling Up"
+                        elif direction == "DOWN":
+                            self.gesture_status = "Scrolling Down"
+                        else:
+                            self.gesture_status = "Pinch Active"
+
+                    else:
+                        # Prevent movement before the next pinch from being reused
+                        movement_tracker.reset()
+                        self.scroll_direction = "IDLE"
+                        self.gesture_status = "Inactive"
+
+                    # Draw the pinch connection
+                    height, width, _ = frame.shape
+
+                    thumb_x = int(landmarks[4].x * width)
+                    thumb_y = int(landmarks[4].y * height)
+
+                    index_x = int(landmarks[8].x * width)
+                    index_y = int(landmarks[8].y * height)
+
+                    line_color = (
+                        (0, 255, 0)
+                        if pinch_active
+                        else (0, 165, 255)
                     )
 
-                    if pinch_active:
-                        status_text = "PINCH ACTIVE"
-                        status_color = (0, 255, 0)
-                    else:
-                        status_text = "PINCH INACTIVE"
-                        status_color = (0, 200, 255)
+                    cv2.line(
+                        frame,
+                        (thumb_x, thumb_y),
+                        (index_x, index_y),
+                        line_color,
+                        3
+                    )
 
-                    # Display pinch status
+                    cv2.circle(
+                        frame,
+                        (thumb_x, thumb_y),
+                        8,
+                        (255, 0, 255),
+                        -1
+                    )
+
+                    cv2.circle(
+                        frame,
+                        (index_x, index_y),
+                        8,
+                        (255, 0, 255),
+                        -1
+                    )
+
+                    # Show gesture status
                     cv2.putText(
                         frame,
-                        status_text,
+                        self.gesture_status,
                         (20, 70),
                         cv2.FONT_HERSHEY_SIMPLEX,
                         0.8,
-                        status_color,
+                        (0, 255, 0) if pinch_active else (0, 200, 255),
                         2
                     )
 
-                    # Display distance between thumb and index finger
+                    # Show pinch distance
                     cv2.putText(
                         frame,
                         f"Pinch distance: {pinch_distance:.3f}",
@@ -145,7 +216,13 @@ class CameraWorker:
                     )
 
                 else:
+                    # No hand detected: reset all gesture states
                     pinch_detector.reset()
+                    movement_tracker.reset()
+
+                    self.pinch_active = False
+                    self.scroll_direction = "IDLE"
+                    self.gesture_status = "Show your hand"
 
                     cv2.putText(
                         frame,
